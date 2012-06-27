@@ -728,7 +728,7 @@ DefinitionBlock (
                     Store(Local3, Index(CPON, Local0))
                     // Do CPU notify
                     If (LEqual(Local3, 1)) {
-                        NTFY(Local0, 1)
+                        NTFY(Local0, 0)
                     } Else {
                         NTFY(Local0, 3)
                     }
