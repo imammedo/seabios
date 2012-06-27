@@ -19,6 +19,23 @@ ACPI_EXTRACT_ALL_CODE ssdp_proc_aml
 
 DefinitionBlock ("ssdt-proc.aml", "SSDT", 0x01, "BXPC", "BXSSDT", 0x1)
 {
+ ACPI_EXTRACT_DEVICE_START ssdt_sck_start
+ ACPI_EXTRACT_DEVICE_END ssdt_sck_end
+ ACPI_EXTRACT_DEVICE_STRING ssdt_sck_name
+ Device (SCAA) {
+    ACPI_EXTRACT_NAME_BYTE_CONST ssdt_sck_id
+    Name (ID, 0xAA)
+    Name (_HID, "ACPI0004")
+
+    External(CPST, MethodObj)
+    Method (_STA, 0) {
+            Return(CPST(ID))
+    }
+
+    Method (_EJ0, 1, NotSerialized) {
+   /*       CPEJ(ID, Arg0) */
+    }
+
     ACPI_EXTRACT_PROCESSOR_START ssdt_proc_start
     ACPI_EXTRACT_PROCESSOR_END ssdt_proc_end
     ACPI_EXTRACT_PROCESSOR_STRING ssdt_proc_name
@@ -45,4 +62,5 @@ DefinitionBlock ("ssdt-proc.aml", "SSDT", 0x01, "BXPC", "BXSSDT", 0x1)
             CPEJ(ID, Arg0)
         }
     }
+ }
 }
