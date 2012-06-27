@@ -405,6 +405,11 @@ encodeLen(u8 *ssdt_ptr, int length, int bytes)
 #define SD_SIZEOF (*ssdt_proc_end - *ssdt_proc_start)
 #define SD_PROC (ssdp_proc_aml + *ssdt_proc_start)
 
+#define SD_OFFSET_SCKHEX (*ssdt_sck_name - *ssdt_sck_start + 2)
+#define SD_OFFSET_SCKID (*ssdt_sck_id - *ssdt_sck_start)
+#define SD_SCK (ssdp_proc_aml + *ssdt_sck_start)
+#define SD_SCK_SIZEOF (*ssdt_sck_end - *ssdt_sck_start)
+
 #define SSDT_SIGNATURE 0x54445353 // SSDT
 
 static void*
@@ -413,7 +418,7 @@ build_ssdt(void)
     int acpi_cpus = MaxCountCPUs > 0xff ? 0xff : MaxCountCPUs;
     // length = ScopeOp + procs + NTYF method + CPON package
     int length = ((1+3+4)
-                  + (acpi_cpus * SD_SIZEOF)
+                  + (acpi_cpus * SD_SCK_SIZEOF)
                   + (1+2+5+(12*acpi_cpus))
                   + (6+2+1+(1*acpi_cpus))
                   + 17);
@@ -432,18 +437,26 @@ build_ssdt(void)
     *(ssdt_ptr++) = 'B';
     *(ssdt_ptr++) = '_';
 
-    // build Processor object for each processor
+    // build Container & Processor object for each processor
     int i;
     for (i=0; i<acpi_cpus; i++) {
+        memcpy(ssdt_ptr, SD_SCK, SD_SCK_SIZEOF);
+        ssdt_ptr[SD_OFFSET_SCKHEX] = getHex(i >> 4);
+        ssdt_ptr[SD_OFFSET_SCKHEX+1] = getHex(i);
+        ssdt_ptr[SD_OFFSET_SCKID] = i;
+
+        ssdt_ptr += *ssdt_proc_start - *ssdt_sck_start;
         memcpy(ssdt_ptr, SD_PROC, SD_SIZEOF);
         ssdt_ptr[SD_OFFSET_CPUHEX] = getHex(i >> 4);
         ssdt_ptr[SD_OFFSET_CPUHEX+1] = getHex(i);
         ssdt_ptr[SD_OFFSET_CPUID1] = i;
         ssdt_ptr[SD_OFFSET_CPUID2] = i;
         ssdt_ptr += SD_SIZEOF;
+
+        ssdt_ptr += *ssdt_sck_end - *ssdt_proc_end;
     }
 
-    // build "Method(NTFY, 2) {If (LEqual(Arg0, 0x00)) {Notify(CP00, Arg1)} ...}"
+    // build "Method(NTFY, 2) {If (LEqual(Arg0, 0x00)) {Notify(SC00, Arg1)} ...}"
     *(ssdt_ptr++) = 0x14; // MethodOp
     ssdt_ptr = encodeLen(ssdt_ptr, 2+5+(12*acpi_cpus), 2);
     *(ssdt_ptr++) = 'N';
@@ -459,8 +472,8 @@ build_ssdt(void)
         *(ssdt_ptr++) = 0x0A; // BytePrefix
         *(ssdt_ptr++) = i;
         *(ssdt_ptr++) = 0x86; // NotifyOp
+        *(ssdt_ptr++) = 'S';
         *(ssdt_ptr++) = 'C';
-        *(ssdt_ptr++) = 'P';
         *(ssdt_ptr++) = getHex(i >> 4);
         *(ssdt_ptr++) = getHex(i);
         *(ssdt_ptr++) = 0x69; // Arg1Op
