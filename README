@@ -1,9 +1,21 @@
 This code implements an X86 legacy bios.  It is intended to be
 compiled using standard gnu tools (eg, gas and gcc).
 
-To build, one should be able to run "make" in the main directory.  The
-resulting file "out/bios.bin" contains the processed bios image.
+To build, one should be able to run "make" in the main directory.
 
+QEMU might only need a part of the BIOS binary, and different QEMU versions
+might need different seabios configurations to work well.  To build
+a bios for qemu, one needs to copy the config file from qemu source tree:
+
+	cp $QEMU_DIR/roms/config.seabios $SEABIOS_DIR/.config
+
+(where $QEMU_DIR is the qemu source directory, $SEABIOS_DIR points to the
+seabios build directory); and then run make in the seabios main directory with
+this configuration:
+
+	make olddefconfig
+
+The resulting file "out/bios.bin" contains the processed bios image.
 
 Testing of images:
 
