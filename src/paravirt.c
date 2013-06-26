@@ -134,6 +134,7 @@ qemu_platform_setup(void)
 #define QEMU_CFG_BOOT_MENU              0x0e
 #define QEMU_CFG_MAX_CPUS               0x0f
 #define QEMU_CFG_FILE_DIR               0x19
+#define QEMU_CFG_PCI_WINDOW             0x1a
 #define QEMU_CFG_ARCH_LOCAL             0x8000
 #define QEMU_CFG_ACPI_TABLES            (QEMU_CFG_ARCH_LOCAL + 0)
 #define QEMU_CFG_SMBIOS_ENTRIES         (QEMU_CFG_ARCH_LOCAL + 1)
@@ -240,6 +241,14 @@ qemu_cfg_legacy(void)
                      , sizeof(numacount) + max_cpu*sizeof(u64)
                      , numacount*sizeof(u64));
 
+    u64 dimm_count;
+    qemu_cfg_select(QEMU_CFG_NUMA);
+    qemu_cfg_skip((1 + max_cpu + numacount) * sizeof(u64));
+    qemu_cfg_read(&dimm_count, sizeof(dimm_count));
+    qemu_romfile_add("etc/numa-dimm-map", QEMU_CFG_NUMA
+                     , (2 + max_cpu + numacount) * sizeof(u64),
+                     dimm_count * 3 * sizeof(u64));
+
     // e820 data
     u32 count32;
     qemu_cfg_read_entry(&count32, QEMU_CFG_E820_TABLE, sizeof(count32));
@@ -330,4 +339,10 @@ void qemu_cfg_init(void)
         qemu_romfile_add(qfile.name, be16_to_cpu(qfile.select)
                          , 0, be32_to_cpu(qfile.size));
     }
+}
+
+void qemu_cfg_get_pci_offsets(u64 *pcimem_start, u64 *pcimem64_start)
+{
+    qemu_cfg_read_entry(pcimem_start, QEMU_CFG_PCI_WINDOW, sizeof(u64));
+    qemu_cfg_read((u8*)(pcimem64_start), sizeof(u64));
 }

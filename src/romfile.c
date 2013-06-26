@@ -51,28 +51,33 @@ romfile_loadfile(const char *name, int *psize)
 {
     struct romfile_s *file = romfile_find(name);
     if (!file)
-        return NULL;
+        goto failed;
 
     int filesize = file->size;
     if (!filesize)
-        return NULL;
+        goto failed;
 
     char *data = malloc_tmphigh(filesize+1);
     if (!data) {
         warn_noalloc();
-        return NULL;
+        goto failed;
     }
 
     dprintf(5, "Copying romfile '%s' (len %d)\n", name, filesize);
     int ret = file->copy(file, data, filesize);
     if (ret < 0) {
         free(data);
-        return NULL;
+        goto failed;
     }
     if (psize)
         *psize = filesize;
     data[filesize] = '\0';
     return data;
+
+failed:
+    if (psize)
+        *psize = 0;
+    return NULL;
 }
 
 // Attempt to load an integer from the given file - return 'defval'
