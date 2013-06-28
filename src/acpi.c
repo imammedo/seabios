@@ -322,6 +322,8 @@ static void patch_pcihp(int slot, u8 *ssdt_ptr, u32 eject)
 
 static void build_memdev(u8 *ssdt_ptr, int i, u64 mem_base, u64 mem_len, u8 node)
 {
+
+    dprintf(1, " memdev: %x\tmem_base: %llx", i, mem_base);
     memcpy(ssdt_ptr, MEM_AML, MEM_SIZEOF);
     ssdt_ptr[MEM_OFFSET_HEX] = getHex(i >> 4);
     ssdt_ptr[MEM_OFFSET_HEX+1] = getHex(i);
@@ -339,15 +341,8 @@ static u8 *build_memssdt(u8 *ssdt_ptr, int memssdt_len,
     u64 *dimm = numadimmsmap;
     int node;
     int i;
-
-    // build Scope(_SB_) header
-    *(ssdt_ptr++) = 0x10; // ScopeOp
-    ssdt_ptr = encodeLen(ssdt_ptr, memssdt_len, 3);
-    *(ssdt_ptr++) = '_';
-    *(ssdt_ptr++) = 'S';
-    *(ssdt_ptr++) = 'B';
-    *(ssdt_ptr++) = '_';
-
+/*
+    dprintf(1, " ssdt_ptr: %lx\n", ssdt_ptr);
     for (i = 0; i < nb_memdevs; i++) {
         mem_base = *dimm++;
         mem_len = *dimm++;
@@ -355,7 +350,8 @@ static u8 *build_memssdt(u8 *ssdt_ptr, int memssdt_len,
         build_memdev(ssdt_ptr, i, mem_base, mem_len, node);
         ssdt_ptr += MEM_SIZEOF;
     }
-
+    dprintf(1, " ssdt_ptr: %lx\n", ssdt_ptr);
+*/
     // build "Method(MTFY, 2) {If (LEqual(Arg0, 0x00)) {Notify(CM00, Arg1)} ...}"
     *(ssdt_ptr++) = 0x14; // MethodOp
     ssdt_ptr = encodeLen(ssdt_ptr, 2+5+(12*nb_memdevs), 2);
@@ -379,33 +375,6 @@ static u8 *build_memssdt(u8 *ssdt_ptr, int memssdt_len,
         *(ssdt_ptr++) = 0x69; // Arg1Op
     }
 
-    // build "Name(MEON, Package() { One, One, ..., Zero, Zero, ... })"
-    *(ssdt_ptr++) = 0x08; // NameOp
-    *(ssdt_ptr++) = 'M';
-    *(ssdt_ptr++) = 'E';
-    *(ssdt_ptr++) = 'O';
-    *(ssdt_ptr++) = 'N';
-    *(ssdt_ptr++) = 0x12; // PackageOp
-    ssdt_ptr = encodeLen(ssdt_ptr, 2+1+(1*nb_memdevs), 2);
-    *(ssdt_ptr++) = nb_memdevs;
-
-    dimm = numadimmsmap;
-    u8 memslot_status = 0, enabled;
-
-    for (i = 0; i < nb_memdevs; i++) {
-        enabled = 0;
-        if (i % 8 == 0)
-            memslot_status = inb(MEM_BASE + i/8);
-        enabled = memslot_status & 1;
-        mem_base = *dimm++;
-        mem_len = *dimm++;
-        dimm++;  // node
-        *(ssdt_ptr++) = enabled ? 0x01 : 0x00;
-        if (enabled)
-            add_e820(mem_base, mem_len, E820_RAM);
-        memslot_status = memslot_status >> 1;
-    }
-
     return ssdt_ptr;
 }
 
@@ -415,25 +384,22 @@ build_ssdt(void)
     int nb_memdevs;
     u64 *numadimmsmap;
     int acpi_cpus = MaxCountCPUs > 0xff ? 0xff : MaxCountCPUs;
+
+    numadimmsmap = romfile_loadfile("etc/numa-dimm-map", &nb_memdevs);
+    nb_memdevs /= 3 * sizeof(u64);
+
     int length = (sizeof(ssdp_misc_aml)                     // _S3_ / _S4_ / _S5_
                   + (1+3+4)                                 // Scope(_SB_)
                   + (acpi_cpus * PROC_SIZEOF)               // procs
                   + (1+2+5+(12*acpi_cpus))                  // NTFY
                   + (6+2+1+(1*acpi_cpus))                   // CPON
+                  + (1+2+5+(12*nb_memdevs))                 // MTFY
                   + (1+3+4)                                 // Scope(PCI0)
                   + ((PCI_SLOTS - 1) * PCIHP_SIZEOF)        // slots
                   + (1+2+5+(12*(PCI_SLOTS - 1))));          // PCNT
 
-    numadimmsmap = romfile_loadfile("etc/numa-dimm-map", &nb_memdevs);
-    nb_memdevs /= 3 * sizeof(u64);
 
-    // for build_memssdt
-    int memssdt_length = (1+3+4)
-                         + (nb_memdevs * MEM_SIZEOF)
-                         + (1+2+5+(12*nb_memdevs))
-                         + (6+2+1+(1*nb_memdevs));
-
-    u8 *ssdt = malloc_high(length + memssdt_length);
+    u8 *ssdt = malloc_high(length);
     if (! ssdt) {
         warn_noalloc();
         free(numadimmsmap);
@@ -508,6 +474,8 @@ build_ssdt(void)
     for (i=0; i<acpi_cpus; i++)
         *(ssdt_ptr++) = (apic_id_is_present(i)) ? 0x01 : 0x00;
 
+    ssdt_ptr = build_notify(ssdt_ptr, "MTFY", 0, nb_memdevs, "MP00", 2);
+
     // build Scope(PCI0) opcode
     *(ssdt_ptr++) = 0x10; // ScopeOp
     ssdt_ptr = encodeLen(ssdt_ptr, length - (ssdt_ptr - ssdt), 3);
@@ -527,11 +495,9 @@ build_ssdt(void)
 
     ssdt_ptr = build_notify(ssdt_ptr, "PCNT", 1, PCI_SLOTS, "S00_", 1);
 
-    ssdt_ptr = build_memssdt(ssdt_ptr, memssdt_length, numadimmsmap, nb_memdevs);
-
     build_header((void*)ssdt, SSDT_SIGNATURE, ssdt_ptr - ssdt, 1);
 
-    //hexdump(ssdt, ssdt_ptr - ssdt);
+    hexdump(ssdt, ssdt_ptr - ssdt);
 
     free(numadimmsmap);
     return ssdt;
@@ -665,16 +631,17 @@ build_srat(void)
         numamem++;
         slots++;
     }
+   /* 
     if (nb_numa_dimms) {
         for (i = 1; i < nb_numa_dimms + 1; ++i) {
             mem_base = *numadimmsmap++;
             mem_len = *numadimmsmap++;
             node = *numadimmsmap++;
-            acpi_build_srat_memory(numamem, mem_base, mem_len, node, 1);
+            acpi_build_srat_memory(numamem, mem_base, mem_len, node, 0);
             numamem++;
             slots++;
         }
-    }
+    }*/
 
     for (; slots < nb_numa_nodes + nb_numa_dimms + 2; slots++) {
         acpi_build_srat_memory(numamem, 0, 0, 0, 0);

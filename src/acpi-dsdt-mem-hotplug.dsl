@@ -5,53 +5,72 @@
 Scope(\_SB) {
         /* Objects filled in by run-time generated SSDT */
         External(MTFY, MethodObj)
-        External(MEON, PkgObj)
 
-        Method (CMST, 1, NotSerialized) {
-            // _STA method - return ON status of memdevice
-            // Local0 = MEON flag for this cpu
-            Store(DerefOf(Index(MEON, Arg0)), Local0)
-            If (Local0) { Return(0xF) } Else { Return(0x0) }
-        }
-
-        /* Memory hotplug notify array */
-        OperationRegion(MEST, SystemIO, 0xaf80, 32)
-        Field (MEST, ByteAcc, NoLock, Preserve)
+       /* Memory hotplug notify array */
+        OperationRegion(MEST, SystemIO, 0xaf80, 3)
+        Field (MEST, ByteAcc, NoLock, WriteAsZeros)
         {
-            MES, 256
+            MES, 8,
+            MER, 8,
+            MOS, 8
         }
 
         Method(MESC, 0) {
-            // Local5 = active memdevice bitmap
-            Store (MES, Local5)
-            // Local2 = last read byte from bitmap
-            Store (Zero, Local2)
-            // Local0 = memory device iterator
-            Store (Zero, Local0)
-            While (LLess(Local0, SizeOf(MEON))) {
-                // Local1 = MEON flag for this memory device
-                Store(DerefOf(Index(MEON, Local0)), Local1)
-                If (And(Local0, 0x07)) {
-                    // Shift down previously read bitmap byte
-                    ShiftRight(Local2, 1, Local2)
-                } Else {
-                    // Read next byte from memdevice bitmap
-                    Store(DerefOf(Index(Local5, ShiftRight(Local0, 3))), Local2)
-                }
-                // Local3 = active state for this memory device
-                Store(And(Local2, 1), Local3)
-
-                If (LNotEqual(Local1, Local3)) {
-                    // State change - update MEON with new state
-                    Store(Local3, Index(MEON, Local0))
-                    // Do MEM notify
-                    If (LEqual(Local3, 1)) {
-                        MTFY(Local0, 1)
-                    }
-                }
-                Increment(Local0)
+            If (And(MES, 0x04)) { // onlining ?
+		\_SB.MTFY(0, 1)
             }
             Return(One)
         }
+
+    Name(MR64, ResourceTemplate() {
+         QWordMemory(ResourceProducer, PosDecode, MinFixed, MaxFixed,
+            Cacheable, ReadWrite,
+            0x00000000,          // Address Space Granularity
+            0x8000000000,        // Address Range Minimum
+            0xFFFFFFFFFF,        // Address Range Maximum
+            0x00000000,          // Address Translation Offset
+            0x8000000000,        // Address Length
+            ,, MW64, AddressRangeMemory, TypeStatic)
+    })
+ 
+    Device(MP00) {
+        Name(ID, 0x00)
+        Name(_HID, EISAID("PNP0C80"))
+        Name(_PXM, 0x00)
+
+        Method(_CRS) {
+          Name(RTM, ResourceTemplate() {
+            QwordMemory(
+               ResourceProducer,
+               ,                     // _DEC
+               MinFixed,             // _MIF
+               MaxFixed,             // _MAF
+               Cacheable,            // _MEM
+               ReadWrite,            // _RW
+               0x0,                  // _GRA
+               0x40000000,           // _MIN
+               0x7fffffff,           // _MAX
+               0x00000000,           // _TRA
+               0x40000000,           // _LEN
+               )
+          })
+                Store(0xFF, MER)
+          Return (RTM)
+        }
+
+        Method (_STA, 0) {
+            If (And(MES, 0x04)) {
+                Return(0xFF)
+            } Else {
+                Return(0)
+            }
+        }
+        
+       Method (_OST, 3, Serialized) {
+                Store(Arg0, MOS)
+                Store(Arg1, MOS)
+       }
+     }
+
 
 }
