@@ -22,7 +22,7 @@ ACPI_EXTRACT_ALL_CODE AmlCode
 DefinitionBlock (
     "acpi-dsdt.aml",    // Output Filename
     "DSDT",             // Signature
-    0x01,               // DSDT Compliance Revision
+    0x02,               // DSDT Compliance Revision
     "BXPC",             // OEMID
     "BXDSDT",           // TABLE ID
     0x1                 // OEM Revision
