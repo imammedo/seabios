@@ -24,8 +24,8 @@ DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
     ACPI_EXTRACT_DEVICE_END ssdt_mem_end
     ACPI_EXTRACT_DEVICE_STRING ssdt_mem_name
     Device(MPAA) {
-        ACPI_EXTRACT_NAME_BYTE_CONST ssdt_mem_id
-        Name(ID, 0xAA)
+        ACPI_EXTRACT_NAME_STRING ssdt_mem_id
+        Name(_UID, "0xAA")
 /*  ^------------------ DO NOT EDIT ------------------^
  *
  * The src/acpi.c code requires the above layout so that it can update
@@ -34,28 +34,23 @@ DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
  * also updating the C code.
  */
         Name(_HID, EISAID("PNP0C80"))
-        Name(_PXM, 0xAA)
 
-        External(CMST, MethodObj)
-        External(MPEJ, MethodObj)
+        External(MCRS, MethodObj)
+        External(MRST, MethodObj)
 
-        Name(_CRS, ResourceTemplate() {
-            QwordMemory(
-               ResourceConsumer,
-               ,                     // _DEC
-               MinFixed,             // _MIF
-               MaxFixed,             // _MAF
-               Cacheable,            // _MEM
-               ReadWrite,            // _RW
-               0x0,                  // _GRA
-               0xDEADBEEF,           // _MIN
-               0xE6ADBEEE,           // _MAX
-               0x00000000,           // _TRA
-               0x08000000,           // _LEN
-               )
-        })
+        Method(_CRS, 0) {
+            Store("_CRS", debug)
+            Return (MCRS(_UID))
+        }
+
         Method (_STA, 0) {
-            Return(CMST(ID))
+            Store("_STA", debug)
+            Return (MRST(_UID))
+        }
+
+        Method (_PXM, 0) {
+            Store("_PXM", debug)
+            Return (0x0)
         }
     }
 }

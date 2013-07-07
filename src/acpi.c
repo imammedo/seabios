@@ -253,15 +253,10 @@ encodeLen(u8 *ssdt_ptr, int length, int bytes)
 #define PCI_SLOTS 32
 
 /* 0x5B 0x82 DeviceOp PkgLength NameString DimmID */
-#define MEM_BASE 0xaf80
 #define MEM_AML (ssdm_mem_aml + *ssdt_mem_start)
 #define MEM_SIZEOF (*ssdt_mem_end - *ssdt_mem_start)
 #define MEM_OFFSET_HEX (*ssdt_mem_name - *ssdt_mem_start + 2)
-#define MEM_OFFSET_ID (*ssdt_mem_id - *ssdt_mem_start)
-#define MEM_OFFSET_PXM 31
-#define MEM_OFFSET_START 55
-#define MEM_OFFSET_END   63
-#define MEM_OFFSET_SIZE  79
+#define MEM_OFFSET_ID (*ssdt_mem_id - *ssdt_mem_start + 7)
 
 #define SSDT_SIGNATURE 0x54445353 // SSDT
 #define SSDT_HEADER_LENGTH 36
@@ -320,64 +315,6 @@ static void patch_pcihp(int slot, u8 *ssdt_ptr, u32 eject)
     }
 }
 
-static void build_memdev(u8 *ssdt_ptr, int i, u64 mem_base, u64 mem_len, u8 node)
-{
-
-    dprintf(1, " memdev: %x\tmem_base: %llx", i, mem_base);
-    memcpy(ssdt_ptr, MEM_AML, MEM_SIZEOF);
-    ssdt_ptr[MEM_OFFSET_HEX] = getHex(i >> 4);
-    ssdt_ptr[MEM_OFFSET_HEX+1] = getHex(i);
-    ssdt_ptr[MEM_OFFSET_ID] = i;
-    ssdt_ptr[MEM_OFFSET_PXM] = node;
-    *(u64*)(ssdt_ptr + MEM_OFFSET_START) = cpu_to_le64(mem_base);
-    *(u64*)(ssdt_ptr + MEM_OFFSET_END) = cpu_to_le64(mem_base + mem_len);
-    *(u64*)(ssdt_ptr + MEM_OFFSET_SIZE) = cpu_to_le64(mem_len);
-}
-
-static u8 *build_memssdt(u8 *ssdt_ptr, int memssdt_len,
-                         u64 *numadimmsmap, int nb_memdevs)
-{
-    u64 mem_base, mem_len;
-    u64 *dimm = numadimmsmap;
-    int node;
-    int i;
-/*
-    dprintf(1, " ssdt_ptr: %lx\n", ssdt_ptr);
-    for (i = 0; i < nb_memdevs; i++) {
-        mem_base = *dimm++;
-        mem_len = *dimm++;
-        node = *dimm++;
-        build_memdev(ssdt_ptr, i, mem_base, mem_len, node);
-        ssdt_ptr += MEM_SIZEOF;
-    }
-    dprintf(1, " ssdt_ptr: %lx\n", ssdt_ptr);
-*/
-    // build "Method(MTFY, 2) {If (LEqual(Arg0, 0x00)) {Notify(CM00, Arg1)} ...}"
-    *(ssdt_ptr++) = 0x14; // MethodOp
-    ssdt_ptr = encodeLen(ssdt_ptr, 2+5+(12*nb_memdevs), 2);
-    *(ssdt_ptr++) = 'M';
-    *(ssdt_ptr++) = 'T';
-    *(ssdt_ptr++) = 'F';
-    *(ssdt_ptr++) = 'Y';
-    *(ssdt_ptr++) = 0x02;
-    for (i=0; i<nb_memdevs; i++) {
-        *(ssdt_ptr++) = 0xA0; // IfOp
-        ssdt_ptr = encodeLen(ssdt_ptr, 11, 1);
-        *(ssdt_ptr++) = 0x93; // LEqualOp
-        *(ssdt_ptr++) = 0x68; // Arg0Op
-        *(ssdt_ptr++) = 0x0A; // BytePrefix
-        *(ssdt_ptr++) = i;
-        *(ssdt_ptr++) = 0x86; // NotifyOp
-        *(ssdt_ptr++) = 'M';
-        *(ssdt_ptr++) = 'P';
-        *(ssdt_ptr++) = getHex(i >> 4);
-        *(ssdt_ptr++) = getHex(i);
-        *(ssdt_ptr++) = 0x69; // Arg1Op
-    }
-
-    return ssdt_ptr;
-}
-
 static void*
 build_ssdt(void)
 {
@@ -394,6 +331,7 @@ build_ssdt(void)
                   + (1+2+5+(12*acpi_cpus))                  // NTFY
                   + (6+2+1+(1*acpi_cpus))                   // CPON
                   + (1+2+5+(12*nb_memdevs))                 // MTFY
+                  + (nb_memdevs * MEM_SIZEOF)               // mem devices
                   + (1+3+4)                                 // Scope(PCI0)
                   + ((PCI_SLOTS - 1) * PCIHP_SIZEOF)        // slots
                   + (1+2+5+(12*(PCI_SLOTS - 1))));          // PCNT
@@ -474,6 +412,16 @@ build_ssdt(void)
     for (i=0; i<acpi_cpus; i++)
         *(ssdt_ptr++) = (apic_id_is_present(i)) ? 0x01 : 0x00;
 
+    // build mem devices and notifiers for them
+    for (i = 0; i < nb_memdevs; i++) {
+        char id[5];
+        snprintf(id, sizeof(id), "%02x", i);
+        memcpy(ssdt_ptr, MEM_AML, MEM_SIZEOF);
+        memcpy(ssdt_ptr + MEM_OFFSET_HEX, id, 2);
+        memcpy(ssdt_ptr + MEM_OFFSET_ID, id, 2);
+     hexdump(ssdt_ptr, MEM_SIZEOF);
+        ssdt_ptr += MEM_SIZEOF;
+    }
     ssdt_ptr = build_notify(ssdt_ptr, "MTFY", 0, nb_memdevs, "MP00", 2);
 
     // build Scope(PCI0) opcode
@@ -497,7 +445,7 @@ build_ssdt(void)
 
     build_header((void*)ssdt, SSDT_SIGNATURE, ssdt_ptr - ssdt, 1);
 
-    hexdump(ssdt, ssdt_ptr - ssdt);
+    // hexdump(ssdt, ssdt_ptr - ssdt);
 
     free(numadimmsmap);
     return ssdt;

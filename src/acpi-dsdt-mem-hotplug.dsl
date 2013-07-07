@@ -23,20 +23,22 @@ Scope(\_SB) {
 
     Method(MESC, 0) {
         If (And(MES, 0x04)) { // onlining ?
-        //    \_SB.MTFY(0, 1)
-            Notify(L1M0, 0)
+            \_SB.MTFY(0, 1)
         }
         Return(One)
     }
 
     Method (MRST, 1) {
+        Store("MRST", debug)
         If (And(MES, 0x04)) {
+            Store(0xF, debug)
             Return(0xF)
         }
         Return(0)
     }
 
     Method(MCRS, 1) {
+        Store("MCRS", debug)
         Name(MR64, ResourceTemplate() {
             QWordMemory(ResourceProducer, PosDecode, MinFixed, MaxFixed,
             Cacheable, ReadWrite,
@@ -83,25 +85,4 @@ Scope(\_SB) {
         Store(MR64, debug)
         Return(MR64)
     }
-
-Device (L1M0)
-        {
-            Name (_HID, EisaId ("PNP0A05"))
-            Name (_UID, 0x10)
-
-    Device(MP00) {
-        Name(_UID, 0x0000)
-        Name(_HID, EISAID("PNP0C80"))
-        //Name(_PXM, 0x00)
-
-        Method(_CRS, 0) {
-          Return (\_SB.MCRS(_UID))
-        }
-
-        Method (_STA, 0) {
-            Return (\_SB.MRST(_UID))
-        }
-     }
-}
-
 }
