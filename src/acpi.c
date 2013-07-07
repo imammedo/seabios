@@ -631,23 +631,23 @@ build_srat(void)
         numamem++;
         slots++;
     }
-   /* 
+
     if (nb_numa_dimms) {
         for (i = 1; i < nb_numa_dimms + 1; ++i) {
             mem_base = *numadimmsmap++;
             mem_len = *numadimmsmap++;
             node = *numadimmsmap++;
-            acpi_build_srat_memory(numamem, mem_base, mem_len, node, 0);
+            acpi_build_srat_memory(numamem, mem_base, mem_len, node, 1);
             numamem++;
             slots++;
         }
-    }*/
-
+    }
+/*
     for (; slots < nb_numa_nodes + nb_numa_dimms + 2; slots++) {
         acpi_build_srat_memory(numamem, 0, 0, 0, 0);
         numamem++;
     }
-
+*/
     build_header((void*)srat, SRAT_SIGNATURE, srat_size, 1);
 
     free(numadata);

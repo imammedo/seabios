@@ -25,7 +25,7 @@
 DefinitionBlock (
     "q35-acpi-dsdt.aml",// Output Filename
     "DSDT",             // Signature
-    0x01,               // DSDT Compliance Revision
+    0x02,               // DSDT Compliance Revision
     "BXPC",             // OEMID
     "BXDSDT",           // TABLE ID
     0x2                 // OEM Revision
