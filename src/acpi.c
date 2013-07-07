@@ -642,12 +642,12 @@ build_srat(void)
             slots++;
         }
     }
-/*
+
     for (; slots < nb_numa_nodes + nb_numa_dimms + 2; slots++) {
         acpi_build_srat_memory(numamem, 0, 0, 0, 0);
         numamem++;
     }
-*/
+
     build_header((void*)srat, SRAT_SIGNATURE, srat_size, 1);
 
     free(numadata);
