@@ -47,8 +47,6 @@ Scope(\_SB) {
         Store(Zero, Local0)
 
         Acquire(MLCK, 0xFFFF)
-        Store("MRST", debug)
-        Store(Arg0, debug)
         Store(ToInteger(Arg0), MSEL) // select DIMM
 
         If (And(MES, 0x04)) {
@@ -61,8 +59,6 @@ Scope(\_SB) {
 
     Method(MCRS, 1) {
         Acquire(MLCK, 0xFFFF)
-        Store("MCRS", debug)
-        Store(Arg0, debug)
         Store(ToInteger(Arg0), MSEL) // select DIMM
 
         Name(MR64, ResourceTemplate() {
