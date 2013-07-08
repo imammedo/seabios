@@ -39,17 +39,14 @@ DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
         External(MRST, MethodObj)
 
         Method(_CRS, 0) {
-            Store("_CRS", debug)
             Return (MCRS(_UID))
         }
 
         Method (_STA, 0) {
-            Store("_STA", debug)
             Return (MRST(_UID))
         }
 
         Method (_PXM, 0) {
-            Store("_PXM", debug)
             Return (0x0)
         }
     }

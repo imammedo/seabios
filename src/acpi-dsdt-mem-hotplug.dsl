@@ -29,16 +29,13 @@ Scope(\_SB) {
     }
 
     Method (MRST, 1) {
-        Store("MRST", debug)
         If (And(MES, 0x04)) {
-            Store(0xF, debug)
             Return(0xF)
         }
         Return(0)
     }
 
     Method(MCRS, 1) {
-        Store("MCRS", debug)
         Name(MR64, ResourceTemplate() {
             QWordMemory(ResourceProducer, PosDecode, MinFixed, MaxFixed,
             Cacheable, ReadWrite,
