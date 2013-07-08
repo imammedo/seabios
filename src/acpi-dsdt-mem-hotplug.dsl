@@ -5,37 +5,66 @@
 Scope(\_SB) {
     /* Objects filled in by run-time generated SSDT */
     External(MTFY, MethodObj)
+    External(MDNR, IntObj)
 
     /* Memory hotplug notify array */
     OperationRegion(HPMR, SystemIO, 0xaf80, 32)
     Field (HPMR, DWordAcc, NoLock, WriteAsZeros)
     {
-        MRBL, 32,
-        MRBH, 32,
-        MRLL, 32,
-        MRLH, 32,
+        MRBL, 32, // DIMM start addr Low word, read only
+        MRBH, 32, // DIMM start addr Hi word, read only
+        MRLL, 32, // DIMM size Low word, read only
+        MRLH, 32, // DIMM size Hi word, read only
     }
     Field (HPMR, ByteAcc, NoLock, WriteAsZeros)
     {
         Offset(0x10),
-        MES, 8,
+        MES, 8,  // DIMM status, read only
+    }
+
+    Mutex (MLCK, 0)
+    Field (HPMR, DWordAcc, NoLock, WriteAsZeros)
+    {
+        MSEL, 32  // DIMM selector, write only
     }
 
     Method(MESC, 0) {
-        If (And(MES, 0x04)) { // onlining ?
-            \_SB.MTFY(0, 1)
+        Store(Zero, Local0) // Mem devs iterrator
+
+        Acquire(MLCK, 0xFFFF)
+        while (LLess(Local0, MDNR)) {
+            Store(Local0, MSEL) // select Local0 DIMM
+            If (And(MES, 0x04)) { // onlining ?
+               \_SB.MTFY(Local0, 1)
+            }
+            Add(Local0, One, Local0) // goto next DIMM
         }
+        Release(MLCK)
         Return(One)
     }
 
     Method (MRST, 1) {
+        Store(Zero, Local0)
+
+        Acquire(MLCK, 0xFFFF)
+        Store("MRST", debug)
+        Store(Arg0, debug)
+        Store(ToInteger(Arg0), MSEL) // select DIMM
+
         If (And(MES, 0x04)) {
-            Return(0xF)
+            Store(0xF, Local0)
         }
-        Return(0)
+
+        Release(MLCK)
+        Return(Local0)
     }
 
     Method(MCRS, 1) {
+        Acquire(MLCK, 0xFFFF)
+        Store("MCRS", debug)
+        Store(Arg0, debug)
+        Store(ToInteger(Arg0), MSEL) // select DIMM
+
         Name(MR64, ResourceTemplate() {
             QWordMemory(ResourceProducer, PosDecode, MinFixed, MaxFixed,
             Cacheable, ReadWrite,
@@ -72,6 +101,7 @@ Scope(\_SB) {
             Subtract(MAXL, One, MAXL)
         }
 
+        Release(MLCK)
         Return(MR64)
     }
 }

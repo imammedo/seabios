@@ -257,6 +257,9 @@ encodeLen(u8 *ssdt_ptr, int length, int bytes)
 #define MEM_SIZEOF (*ssdt_mem_end - *ssdt_mem_start)
 #define MEM_OFFSET_HEX (*ssdt_mem_name - *ssdt_mem_start + 2)
 #define MEM_OFFSET_ID (*ssdt_mem_id - *ssdt_mem_start + 7)
+#define MEM_DEV_COUNT_OBJ (ssdm_mem_aml + *ssdt_mem_count_name - 1/* name prefix */)
+#define MEM_DEV_COUNT_OFFSET (*ssdt_mem_count - *ssdt_mem_count_name)
+#define MEM_DEV_COUNT_SIZE (*ssdt_mem_start - *ssdt_mem_count_name + 1/* name prefix */)
 
 #define SSDT_SIGNATURE 0x54445353 // SSDT
 #define SSDT_HEADER_LENGTH 36
@@ -331,6 +334,7 @@ build_ssdt(void)
                   + (1+2+5+(12*acpi_cpus))                  // NTFY
                   + (6+2+1+(1*acpi_cpus))                   // CPON
                   + (1+2+5+(12*nb_memdevs))                 // MTFY
+                  + MEM_DEV_COUNT_SIZE                      // MDNR const
                   + (nb_memdevs * MEM_SIZEOF)               // mem devices
                   + (1+3+4)                                 // Scope(PCI0)
                   + ((PCI_SLOTS - 1) * PCIHP_SIZEOF)        // slots
@@ -412,6 +416,13 @@ build_ssdt(void)
     for (i=0; i<acpi_cpus; i++)
         *(ssdt_ptr++) = (apic_id_is_present(i)) ? 0x01 : 0x00;
 
+    // set number of mem devices. i.e. declare Name(MDNR, nb_memdevs)
+    memcpy(ssdt_ptr, MEM_DEV_COUNT_OBJ, MEM_DEV_COUNT_SIZE);
+    memcpy(ssdt_ptr + MEM_DEV_COUNT_OFFSET, &nb_memdevs, 4);
+    dprintf(1, "mdev sz: %d, nr: %d", MEM_DEV_COUNT_SIZE, *(u32*)(ssdt_ptr + MEM_DEV_COUNT_OFFSET));
+	hexdump(ssdt_ptr, MEM_DEV_COUNT_SIZE);
+    ssdt_ptr += MEM_DEV_COUNT_SIZE;
+
     // build mem devices and notifiers for them
     for (i = 0; i < nb_memdevs; i++) {
         char id[5];
@@ -419,7 +430,6 @@ build_ssdt(void)
         memcpy(ssdt_ptr, MEM_AML, MEM_SIZEOF);
         memcpy(ssdt_ptr + MEM_OFFSET_HEX, id, 2);
         memcpy(ssdt_ptr + MEM_OFFSET_ID, id, 2);
-     hexdump(ssdt_ptr, MEM_SIZEOF);
         ssdt_ptr += MEM_SIZEOF;
     }
     ssdt_ptr = build_notify(ssdt_ptr, "MTFY", 0, nb_memdevs, "MP00", 2);

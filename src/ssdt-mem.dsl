@@ -20,6 +20,10 @@ ACPI_EXTRACT_ALL_CODE ssdm_mem_aml
 DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
 /*  v------------------ DO NOT EDIT ------------------v */
 {
+    ACPI_EXTRACT_NAME_STRING      ssdt_mem_count_name
+    ACPI_EXTRACT_NAME_DWORD_CONST ssdt_mem_count
+    Name(MDNR, 0xFFFFFFFF)
+
     ACPI_EXTRACT_DEVICE_START ssdt_mem_start
     ACPI_EXTRACT_DEVICE_END ssdt_mem_end
     ACPI_EXTRACT_DEVICE_STRING ssdt_mem_name
