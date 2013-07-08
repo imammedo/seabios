@@ -9,21 +9,24 @@ Scope(\_SB) {
 
     /* Memory hotplug notify array */
     OperationRegion(HPMR, SystemIO, 0xaf80, 32)
-    Field (HPMR, DWordAcc, NoLock, WriteAsZeros)
+    Field (HPMR, DWordAcc, NoLock, Preserve)
     {
         MRBL, 32, // DIMM start addr Low word, read only
         MRBH, 32, // DIMM start addr Hi word, read only
         MRLL, 32, // DIMM size Low word, read only
         MRLH, 32, // DIMM size Hi word, read only
     }
-    Field (HPMR, ByteAcc, NoLock, WriteAsZeros)
+    Field (HPMR, ByteAcc, NoLock, Preserve)
     {
-        Offset(0x10),
-        MES, 8,  // DIMM status, read only
+        Offset(16),
+        MVER, 8, // Interface version
+        MES,  1, // 1 if DIMM enabled for _STA, read only
+        MINS, 1, // 1 if DIMM has a insert event, read only
+        MRMV, 1, // 1 if DIMM has a remove request, read only
     }
 
     Mutex (MLCK, 0)
-    Field (HPMR, DWordAcc, NoLock, WriteAsZeros)
+    Field (HPMR, DWordAcc, NoLock, Preserve)
     {
         MSEL, 32  // DIMM selector, write only
     }
@@ -34,8 +37,11 @@ Scope(\_SB) {
         Acquire(MLCK, 0xFFFF)
         while (LLess(Local0, MDNR)) {
             Store(Local0, MSEL) // select Local0 DIMM
-            If (And(MES, 0x04)) { // onlining ?
-               \_SB.MTFY(Local0, 1)
+            If (LEqual(MINS, One)) { // Memory device needs check
+                \_SB.MTFY(Local0, 1)
+            }
+            If (LEqual(MRMV, One)) { // Ejection request
+                \_SB.MTFY(Local0, 3)
             }
             Add(Local0, One, Local0) // goto next DIMM
         }
@@ -49,7 +55,7 @@ Scope(\_SB) {
         Acquire(MLCK, 0xFFFF)
         Store(ToInteger(Arg0), MSEL) // select DIMM
 
-        If (And(MES, 0x04)) {
+        If (LEqual(MES, One)) {
             Store(0xF, Local0)
         }
 
