@@ -41,6 +41,7 @@ DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
 
         External(MCRS, MethodObj)
         External(MRST, MethodObj)
+        External(MOST, MethodObj)
 
         Method(_CRS, 0) {
             Return (MCRS(_UID))
@@ -52,6 +53,10 @@ DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
 
         Method (_PXM, 0) {
             Return (0x0)
+        }
+
+        Method (_OST, 3) {
+            Return (MOST(_UID, Arg0, Arg1, Arg2))
         }
     }
 }

@@ -28,7 +28,9 @@ Scope(\_SB) {
     Mutex (MLCK, 0)
     Field (HPMR, DWordAcc, NoLock, Preserve)
     {
-        MSEL, 32  // DIMM selector, write only
+        MSEL, 32,  // DIMM selector, write only
+        MOEV, 32,  // _OST event code, write only
+        MOSC, 32,  // _OST status code, write only
     }
 
     Method(MESC, 0) {
@@ -105,5 +107,13 @@ Scope(\_SB) {
 
         Release(MLCK)
         Return(MR64)
+    }
+
+    Method(MOST, 4) {
+        Acquire(MLCK, 0xFFFF)
+        Store(ToInteger(Arg0), MSEL) // select DIMM
+        Store(Arg1, MOEV)
+        Store(Arg2, MOSC)
+        Release(MLCK)
     }
 }
