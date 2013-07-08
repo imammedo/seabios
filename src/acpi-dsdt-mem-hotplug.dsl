@@ -15,10 +15,11 @@ Scope(\_SB) {
         MRBH, 32, // DIMM start addr Hi word, read only
         MRLL, 32, // DIMM size Low word, read only
         MRLH, 32, // DIMM size Hi word, read only
+        MPX, 32,  // DIMM node proximity, read only
     }
     Field (HPMR, ByteAcc, NoLock, Preserve)
     {
-        Offset(16),
+        Offset(20),
         MVER, 8, // Interface version
         MES,  1, // 1 if DIMM enabled for _STA, read only
         MINS, 1, // 1 if DIMM has a insert event, read only
@@ -107,6 +108,14 @@ Scope(\_SB) {
 
         Release(MLCK)
         Return(MR64)
+    }
+
+    Method (MPXM, 1) {
+        Acquire(MLCK, 0xFFFF)
+        Store(ToInteger(Arg0), MSEL) // select DIMM
+        Store(MPX, Local0)
+        Release(MLCK)
+        Return(Local0)
     }
 
     Method(MOST, 4) {
