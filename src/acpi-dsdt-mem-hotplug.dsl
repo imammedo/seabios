@@ -42,24 +42,20 @@ Scope(\_SB) {
         Name(MR64, ResourceTemplate() {
             QWordMemory(ResourceProducer, PosDecode, MinFixed, MaxFixed,
             Cacheable, ReadWrite,
-            0x00000000,          // Address Space Granularity
+            0x0000000000000000,        // Address Space Granularity
             0x0000000000000000,        // Address Range Minimum
             0xFFFFFFFFFFFFFFFE,        // Address Range Maximum
-            0x00000000,          // Address Translation Offset
+            0x0000000000000000,        // Address Translation Offset
             0xFFFFFFFFFFFFFFFF,        // Address Length
             ,, MW64, AddressRangeMemory, TypeStatic)
         })
 
-        CreateQWordField(MR64, MW64._MIN, MIN)
-        CreateQWordField(MR64, MW64._MAX, MAX)
-        CreateQWordField(MR64, MW64._LEN, LEN)
-
-        CreateDWordField(MIN, 0, MINL)
-        CreateDWordField(MIN, 4, MINH)
-        CreateDWordField(LEN, 0, LENL)
-        CreateDWordField(LEN, 4, LENH)
-        CreateDWordField(MAX, 0, MAXL)
-        CreateDWordField(MAX, 4, MAXH)
+        CreateDWordField(MR64, 14, MINL)
+        CreateDWordField(MR64, 18, MINH)
+        CreateDWordField(MR64, 38, LENL)
+        CreateDWordField(MR64, 42, LENH)
+        CreateDWordField(MR64, 22, MAXL)
+        CreateDWordField(MR64, 26, MAXH)
 
         Store(MRBH, MINH)
         Store(MRBL, MINL)
@@ -79,10 +75,6 @@ Scope(\_SB) {
             Subtract(MAXL, One, MAXL)
         }
 
-        Store(MIN, debug)
-        Store(LEN, debug)
-        Store(MAX, debug)
-        Store(MR64, debug)
         Return(MR64)
     }
 }
