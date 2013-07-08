@@ -258,7 +258,7 @@ encodeLen(u8 *ssdt_ptr, int length, int bytes)
 #define MEM_OFFSET_HEX (*ssdt_mem_name - *ssdt_mem_start + 2)
 #define MEM_OFFSET_ID (*ssdt_mem_id - *ssdt_mem_start + 7)
 #define MEM_DEV_COUNT_OBJ (ssdm_mem_aml + *ssdt_mem_count_name - 1/* name prefix */)
-#define MEM_DEV_COUNT_OFFSET (*ssdt_mem_count - *ssdt_mem_count_name)
+#define MEM_DEV_COUNT_OFFSET (*ssdt_mem_count - *ssdt_mem_count_name + 1/* name prefix */)
 #define MEM_DEV_COUNT_SIZE (*ssdt_mem_start - *ssdt_mem_count_name + 1/* name prefix */)
 
 #define SSDT_SIGNATURE 0x54445353 // SSDT
@@ -419,8 +419,6 @@ build_ssdt(void)
     // set number of mem devices. i.e. declare Name(MDNR, nb_memdevs)
     memcpy(ssdt_ptr, MEM_DEV_COUNT_OBJ, MEM_DEV_COUNT_SIZE);
     memcpy(ssdt_ptr + MEM_DEV_COUNT_OFFSET, &nb_memdevs, 4);
-    dprintf(1, "mdev sz: %d, nr: %d", MEM_DEV_COUNT_SIZE, *(u32*)(ssdt_ptr + MEM_DEV_COUNT_OFFSET));
-	hexdump(ssdt_ptr, MEM_DEV_COUNT_SIZE);
     ssdt_ptr += MEM_DEV_COUNT_SIZE;
 
     // build mem devices and notifiers for them
