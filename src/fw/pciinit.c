@@ -18,6 +18,8 @@
 #include "paravirt.h" // RamSize
 #include "string.h" // memset
 #include "util.h" // pci_setup
+#include "byteorder.h" // le64_to_cpu
+#include "romfile.h" // romfile_loadint
 
 #define PCI_DEVICE_MEM_MIN     0x1000
 #define PCI_BRIDGE_IO_MIN      0x1000
@@ -764,6 +766,8 @@ static void pci_bios_map_devices(struct pci_bus *busses)
 {
     if (pci_bios_init_root_regions(busses)) {
         struct pci_region r64_mem, r64_pref;
+        u64 base64 = le64_to_cpu(romfile_loadint("etc/ram-end",
+                                 0x100000000ULL + RamSizeOver4G));
         r64_mem.list.first = NULL;
         r64_pref.list.first = NULL;
         pci_region_migrate_64bit_entries(&busses[0].r[PCI_REGION_TYPE_MEM],
@@ -779,7 +783,7 @@ static void pci_bios_map_devices(struct pci_bus *busses)
         u64 align_mem = pci_region_align(&r64_mem);
         u64 align_pref = pci_region_align(&r64_pref);
 
-        r64_mem.base = ALIGN(0x100000000LL + RamSizeOver4G, align_mem);
+        r64_mem.base = ALIGN(base64, align_mem);
         r64_pref.base = ALIGN(r64_mem.base + sum_mem, align_pref);
         pcimem64_start = r64_mem.base;
         pcimem64_end = r64_pref.base + sum_pref;
