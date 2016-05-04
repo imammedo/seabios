@@ -24,6 +24,10 @@ mptable_setup(void)
     if (! CONFIG_MPTABLE)
         return;
 
+    if (romfile_loadint("etc/max-cpus", 0) > 255) {
+        dprintf(1, "MPTable doesn't support more than 254 CPUs. Skip it.\n");
+        return;
+    }
     dprintf(3, "init MPTable\n");
 
     // Config structure in temp area.
