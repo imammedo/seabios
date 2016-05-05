@@ -19,6 +19,9 @@
 #define APIC_LINT1   ((u8*)BUILD_APIC_ADDR + 0x360)
 
 #define APIC_ENABLED 0x0100
+#define MSR_IA32_APIC_BASE 0x01B
+#define MSR_LOCAL_APIC_ID 0x802
+#define MSR_IA32_APICBASE_EXTD (1ULL << 10) /* Enable x2APIC mode */
 
 static struct { u32 index; u64 val; } smp_mtrr[32];
 static u32 smp_mtrr_count;
@@ -49,13 +52,24 @@ int apic_id_is_present(u8 apic_id)
 static int
 apic_id_init(void)
 {
+    u32 apic_id;
     CountCPUs++;
 
-    // Track found apic id for use in legacy internal bios tables
     u32 eax, ebx, ecx, cpuid_features;
     cpuid(1, &eax, &ebx, &ecx, &cpuid_features);
-    u8 apic_id = ebx>>24;
-    FoundAPICIDs[apic_id/32] |= 1 << (apic_id % 32);
+    apic_id = ebx>>24;
+    if (MaxCountCPUs < 256) { // xAPIC mode
+        // Track found apic id for use in legacy internal bios tables
+        FoundAPICIDs[apic_id/32] |= 1 << (apic_id % 32);
+    } else if (ecx & CPUID_X2APIC) {
+        // switch to x2APIC mode
+        u64 apic_base = rdmsr(MSR_IA32_APIC_BASE);
+        wrmsr(MSR_IA32_APIC_BASE, apic_base | MSR_IA32_APICBASE_EXTD);
+        apic_id = rdmsr(MSR_LOCAL_APIC_ID);
+    } else {
+        // x2APIC is masked by CPUID
+        apic_id = -1;
+    }
 
     return apic_id;
 }
@@ -125,12 +139,14 @@ smp_setup(void)
     u32 sipi_vector = BUILD_AP_BOOT_ADDR >> 12;
     writel(APIC_ICR_LOW, 0x000C4600 | sipi_vector);
 
+    MaxCountCPUs = romfile_loadint("etc/max-cpus", 1);
     // Put BSP into APIC ID bitmap and CPUs counter
     apic_id_init();
 
     // Wait for other CPUs to process the SIPI.
-    u8 cmos_smp_count = rtc_read(CMOS_BIOS_SMP_COUNT) + 1;
-    while (cmos_smp_count != CountCPUs)
+    u16 boot_cpus_count = romfile_loadint("etc/boot-cpus",
+                                          rtc_read(CMOS_BIOS_SMP_COUNT) + 1);
+    while (boot_cpus_count != CountCPUs)
         asm volatile(
             // Release lock and allow other processors to use the stack.
             "  movl %%esp, %1\n"
@@ -146,7 +162,6 @@ smp_setup(void)
     // Restore memory.
     *(u64*)BUILD_AP_BOOT_ADDR = old;
 
-    MaxCountCPUs = romfile_loadint("etc/max-cpus", 0);
     if (!MaxCountCPUs || MaxCountCPUs < CountCPUs)
         MaxCountCPUs = CountCPUs;
 
