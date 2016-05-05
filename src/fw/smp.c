@@ -19,6 +19,9 @@
 #define APIC_LINT1   ((u8*)BUILD_APIC_ADDR + 0x360)
 
 #define APIC_ENABLED 0x0100
+#define MSR_IA32_APIC_BASE 0x01B
+#define MSR_LOCAL_APIC_ID 0x802
+#define MSR_IA32_APICBASE_EXTD (1ULL << 10) /* Enable x2APIC mode */
 
 static struct { u32 index; u64 val; } smp_mtrr[32];
 static u32 smp_mtrr_count;
@@ -46,6 +49,19 @@ int apic_id_is_present(u8 apic_id)
     return !!(FoundAPICIDs[apic_id/32] & (1ul << (apic_id % 32)));
 }
 
+static void handle_x2apic(u32 has_x2apic)
+{
+    if (MaxCountCPUs < 256)
+        return;
+
+    if (!has_x2apic)
+        return;
+
+    // switch to x2APIC mode
+    u64 apic_base = rdmsr(MSR_IA32_APIC_BASE);
+    wrmsr(MSR_IA32_APIC_BASE, apic_base | MSR_IA32_APICBASE_EXTD);
+}
+
 void VISIBLE32FLAT
 handle_smp(void)
 {
@@ -55,17 +71,24 @@ handle_smp(void)
     // Detect apic_id
     u32 eax, ebx, ecx, cpuid_features;
     cpuid(1, &eax, &ebx, &ecx, &cpuid_features);
-    u8 apic_id = ebx>>24;
-    dprintf(DEBUG_HDL_smp, "handle_smp: apic_id=%d\n", apic_id);
+
+    handle_x2apic(ecx & CPUID_X2APIC);
 
     // MTRR setup
     int i;
     for (i=0; i<smp_mtrr_count; i++)
         wrmsr(smp_mtrr[i].index, smp_mtrr[i].val);
 
-    // Set bit on FoundAPICIDs
-    FoundAPICIDs[apic_id/32] |= (1 << (apic_id % 32));
-
+    /*
+     * QEMU that supports APIC ID > 255 provides its own BIOS tables
+     * so skip filling present APIC map as it's not used.
+     * (it's used for internal BIOS tables for QEMU older than 1.8)
+     */
+    if (MaxCountCPUs < 255) {
+       u32 apic_id = ebx>>24;
+       // Set bit on FoundAPICIDs
+       FoundAPICIDs[apic_id/32] |= (1 << (apic_id % 32));
+    }
     CountCPUs++;
 }
 
@@ -90,6 +113,11 @@ smp_setup(void)
         MaxCountCPUs = 1;
         return;
     }
+
+    /* set max possible APIC ID limit for AP bootstrap to decide
+     * if it neds to switch into x2APIC mode
+     */
+    MaxCountCPUs = romfile_loadint("etc/max-cpus", 1);
 
     // mark the BSP initial APIC ID as found, too:
     u8 apic_id = ebx>>24;
@@ -124,8 +152,9 @@ smp_setup(void)
     writel(APIC_ICR_LOW, 0x000C4600 | sipi_vector);
 
     // Wait for other CPUs to process the SIPI.
-    u8 cmos_smp_count = rtc_read(CMOS_BIOS_SMP_COUNT) + 1;
-    while (cmos_smp_count != CountCPUs)
+    u16 boot_cpus_count = romfile_loadint("etc/boot-cpus",
+                                          rtc_read(CMOS_BIOS_SMP_COUNT) + 1);
+    while (boot_cpus_count != CountCPUs)
         asm volatile(
             // Release lock and allow other processors to use the stack.
             "  movl %%esp, %1\n"
@@ -141,8 +170,9 @@ smp_setup(void)
     // Restore memory.
     *(u64*)BUILD_AP_BOOT_ADDR = old;
 
-    MaxCountCPUs = romfile_loadint("etc/max-cpus", 0);
-    if (!MaxCountCPUs || MaxCountCPUs < CountCPUs)
+    handle_x2apic(ecx & CPUID_X2APIC);
+
+    if (MaxCountCPUs < CountCPUs)
         MaxCountCPUs = CountCPUs;
 
     dprintf(1, "Found %d cpu(s) max supported %d cpu(s)\n", CountCPUs,
