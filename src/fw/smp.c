@@ -162,9 +162,6 @@ smp_setup(void)
     // Restore memory.
     *(u64*)BUILD_AP_BOOT_ADDR = old;
 
-    if (!MaxCountCPUs || MaxCountCPUs < CountCPUs)
-        MaxCountCPUs = CountCPUs;
-
     dprintf(1, "Found %d cpu(s) max supported %d cpu(s)\n", CountCPUs,
             MaxCountCPUs);
 }
