@@ -55,24 +55,32 @@ int apic_id_is_present(u8 apic_id)
     return !!(FoundAPICIDs[apic_id/32] & (1ul << (apic_id % 32)));
 }
 
+static int
+apic_id_init(void)
+{
+    CountCPUs++;
+
+    // Track found apic id for use in legacy internal bios tables
+    u32 eax, ebx, ecx, cpuid_features;
+    cpuid(1, &eax, &ebx, &ecx, &cpuid_features);
+    u8 apic_id = ebx>>24;
+    FoundAPICIDs[apic_id/32] |= 1 << (apic_id % 32);
+
+    return apic_id;
+}
+
 void VISIBLE32FLAT
 handle_smp(void)
 {
     if (!CONFIG_QEMU)
         return;
 
-    // Detect apic_id
-    u32 eax, ebx, ecx, cpuid_features;
-    cpuid(1, &eax, &ebx, &ecx, &cpuid_features);
-    u8 apic_id = ebx>>24;
+    // Track this CPU and detect the apic_id
+    int apic_id = apic_id_init();
     dprintf(DEBUG_HDL_smp, "handle_smp: apic_id=%d\n", apic_id);
 
     smp_write_msrs();
 
-    // Set bit on FoundAPICIDs
-    FoundAPICIDs[apic_id/32] |= (1 << (apic_id % 32));
-
-    CountCPUs++;
 }
 
 // Atomic lock for shared stack across processors.
@@ -92,11 +100,6 @@ smp_scan(void)
         CountCPUs= 1;
         return;
     }
-
-    // mark the BSP initial APIC ID as found, too:
-    u8 apic_id = ebx>>24;
-    FoundAPICIDs[apic_id/32] |= (1 << (apic_id % 32));
-    CountCPUs = 1;
 
     // Setup jump trampoline to counter code.
     u64 old = *(u64*)BUILD_AP_BOOT_ADDR;
@@ -124,6 +127,9 @@ smp_scan(void)
     writel(APIC_ICR_LOW, 0x000C4500);
     u32 sipi_vector = BUILD_AP_BOOT_ADDR >> 12;
     writel(APIC_ICR_LOW, 0x000C4600 | sipi_vector);
+
+    // Put BSP into APIC ID bitmap and CPUs counter
+    apic_id_init();
 
     // Wait for other CPUs to process the SIPI.
     u8 cmos_smp_count = rtc_read(CMOS_BIOS_SMP_COUNT) + 1;
