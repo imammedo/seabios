@@ -46,7 +46,7 @@ smp_write_msrs(void)
 }
 
 u32 MaxCountCPUs;
-static u32 CountCPUs;
+static u32 BroughtUpCPUs;
 // 256 bits for the found APIC IDs
 static u32 FoundAPICIDs[256/32];
 
@@ -78,7 +78,7 @@ handle_smp(void)
 
     smp_write_msrs();
 
-    CountCPUs++;
+    BroughtUpCPUs++;
 }
 
 // Atomic lock for shared stack across processors.
@@ -95,13 +95,13 @@ smp_scan(void)
     if (eax < 1 || !(cpuid_features & CPUID_APIC)) {
         // No apic - only the main cpu is present.
         dprintf(1, "No apic - only the main cpu is present.\n");
-        CountCPUs= 1;
+        BroughtUpCPUs= 1;
         return;
     }
 
     // mark the BSP initial APIC ID as found, too:
     apic_id_init();
-    CountCPUs = 1;
+    BroughtUpCPUs = 1;
 
     // Setup jump trampoline to counter code.
     u64 old = *(u64*)BUILD_AP_BOOT_ADDR;
@@ -131,8 +131,8 @@ smp_scan(void)
     writel(APIC_ICR_LOW, 0x000C4600 | sipi_vector);
 
     // Wait for other CPUs to process the SIPI.
-    u8 cmos_smp_count = rtc_read(CMOS_BIOS_SMP_COUNT) + 1;
-    while (cmos_smp_count != CountCPUs)
+    u8 smp_count, smp_count_initial = rtc_read(CMOS_BIOS_SMP_COUNT) + 1;
+    while ((smp_count = rtc_read(CMOS_BIOS_SMP_COUNT) + 1) != BroughtUpCPUs) {
         asm volatile(
             // Release lock and allow other processors to use the stack.
             "  movl %%esp, %1\n"
@@ -143,12 +143,15 @@ smp_scan(void)
             "  jc 1b\n"
             : "+m" (SMPLock), "+m" (SMPStack)
             : : "cc", "memory");
+        if (smp_count != smp_count_initial)
+            dprintf(1, "Error: count of present cpus changed, reboot manually");
+    }
     yield();
 
     // Restore memory.
     *(u64*)BUILD_AP_BOOT_ADDR = old;
 
-    dprintf(1, "Found %d cpu(s) max supported %d cpu(s)\n", CountCPUs,
+    dprintf(1, "Found %d cpu(s) max supported %d cpu(s)\n", BroughtUpCPUs,
             MaxCountCPUs);
 }
 
